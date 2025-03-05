@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Desktop Web Avançado</title>
+  <style>
+    /* ======== CSS GERAL ======== */
+    * {
+      margin: 0; padding: 0; box-sizing: border-box;
+    }
+    body, html {
+      width: 100%; height: 100%; overflow: hidden; user-select: none;
+      font-family: Arial, sans-serif;
+    }
+
+    /* Papel de parede, definido dinamicamente via JS. Valor default: Kali wallpaper */
+    body {
+      background: url("https://www.kali.org/wallpapers/images/2020.4/kali-contours.png")
+        no-repeat center center fixed;
+      background-size: cover;
+      width: 100%;
+      height: 100%;
+      overflow: hidden; /* <-- Este 'overflow: hidden' impede rolagem e pode cortar a tela */
+      user-select: none; /* Impede seleção de texto */
+    }
+
+    /* ======== TELA DE BLOQUEIO ======== */
+    #lock-screen {
+      display: none; /* Visível só quando bloqueado */
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8);
+      z-index: 999999; /* Acima de tudo */
+      color: white;
+      text-align: center;
+      padding-top: 10%;
+      font-size: 20px;
+    }
+    #lock-screen input {
+      font-size: 16px; padding: 5px; margin-top: 10px;
+    }
+
+    /* ======== ÁREA DE TRABALHO ======== */
+    #desktop-area {
+      position: absolute;
+      width: 100%; height: 100%;
+      overflow: hidden; /* Impede scroll */
+    }
+
+    /* ======== ÍCONES NO DESKTOP ======== */
+    .desktop-icons {
+      position: absolute; top: 20px; left: 20px;
+      display: flex; flex-direction: column; gap: 10px;
+      z-index: 50;
+    }
+    .desktop-icon {
+      display: flex; flex-direction: column; align-items: center;
+      width: 60px; /* Largura fixa para facilitar clique */
+      cursor: pointer; color: white; position: absolute;
+      text-align: center;
+    }
+    .desktop-icon img {
+      width: 48px; height: 48px;
+    }
+    .desktop-icon span { margin-top: 5px; font-size: 12px; }
+    .desktop-icon.dragging {
+      opacity: 0.5; /* Feedback visual durante drag */
+    }
+
+    /* ======== MENU DE CONTEXTO (botão direito) ======== */
+    .context-menu {
+      position: absolute; display: none;
+      background-color: #222; border: 1px solid #444; border-radius: 5px;
+      z-index: 10000;
+    }
+    .context-menu ul { list-style: none; margin: 0; padding: 5px 0; }
+    .context-menu li {
+      padding: 5px 15px; color: white; cursor: pointer;
+    }
+    .context-menu li:hover { background-color: #444; }
+
+    /* ======== TASKBAR ======== */
+    .taskbar {
+      position: fixed; bottom: 0; left: 0;
+      width: 100%; height: 40px;
+      background-color: #333; display: flex; align-items: center;
+      padding: 0 10px; box-sizing: border-box; color: white; z-index: 9999;
+      justify-content: flex-start;
+    }
+
+    /* Botão de start e botões gerais */
+    .start-button, .open-terminal {
+      display: flex; align-items: center; gap: 5px;
+      background: linear-gradient(to bottom, #2b2b2b, #1e1e1e);
+      border: 1px solid #444; border-radius: 4px;
+      color: white; padding: 5px 15px; margin-right: 10px;
+      cursor: pointer; transition: 0.3s;
+    }
+    .start-button:hover, .open-terminal:hover {
+      background: linear-gradient(to bottom, #3a3a3a, #292929);
+      box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+      transform: scale(1.03);
+    }
+    .start-button:active, .open-terminal:active {
+      background: linear-gradient(to bottom, #444, #333);
+      transform: scale(0.98); box-shadow: none;
+    }
+    .icon-image {
+      width: 18px; height: 18px; object-fit: cover; border-radius: 2px;
+    }
+
+    /* Exemplo de “desktop switcher” no meio da taskbar */
+    .desktop-switcher {
+      margin-left: 10px; display: flex; gap: 5px;
+    }
+    .desktop-btn {
+      width: 30px; height: 30px; background: #444; border: 1px solid #555;
+      border-radius: 4px; cursor: pointer; color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; transition: 0.2s;
+    }
+    .desktop-btn.active {
+      background: #555; transform: scale(1.05);
+    }
+    .desktop-btn:hover { background: #666; }
+
+    /* ======== LISTA DE JANELAS NA TASKBAR ======== */
+    .taskbar-windows {
+      display: flex; gap: 5px; margin-left: 10px;
+    }
+    .taskbar-window-btn {
+      background: #444; color: white; border: 1px solid #555;
+      border-radius: 3px; padding: 3px 5px; cursor: pointer; font-size: 12px;
+      max-width: 100px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;
+    }
+    .taskbar-window-btn.active {
+      background: #555;
+    }
+    .taskbar-window-btn:hover {
+      background: #666;
+    }
+
+    /* ======== TRAY ICONS / RELÓGIO ======== */
+    .tray-icons {
+      margin-left: auto; display: flex; align-items: center; gap: 10px;
+    }
+    .tray-icon {
+      width: 20px; height: 20px; cursor: pointer;
+      opacity: 0.9; transition: opacity 0.2s;
+    }
+    .tray-icon:hover {
+      opacity: 1;
+    }
+    .divider {
+      width: 1px; height: 20px; background: #666;
+    }
+
+    .notification-panel {
+      display: none; position: absolute; bottom: 45px; right: 10px;
+      width: 200px; background: #222; border: 1px solid #444;
+      border-radius: 4px; color: white; font-size: 12px;
+      max-height: 200px; overflow-y: auto; z-index: 10001;
+    }
+    .notification-panel p {
+      padding: 5px; border-bottom: 1px solid #444;
+    }
+    .notification-panel p:last-child {
+      border-bottom: none;
+    }
+
+    /* Relógio e tooltip */
+    .taskbar-clock {
+      display: flex; align-items: center; position: relative;
+      font-family: Arial, sans-serif;
+    }
+    .clock {
+      font-size: 14px; background: linear-gradient(to bottom, #3a3a3a, #292929);
+      padding: 5px 10px; border-radius: 3px;
+    }
+    .tooltip {
+      visibility: hidden; background-color: #222; color: #fff; text-align: center;
+      border-radius: 5px; padding: 3px 6px; position: absolute; z-index: 1;
+      bottom: 120%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.2s;
+      font-size: 12px; pointer-events: none;
+    }
+    .tooltip::after {
+      content: ""; position: absolute; top: 100%; left: 50%; margin-left: -6px;
+      border-width: 6px; border-style: solid; border-color: #222 transparent transparent transparent;
+    }
+    .taskbar-clock:hover .tooltip {
+      visibility: visible; opacity: 1;
+    }
+
+    /* ======== START MENU ======== */
+    .start-menu {
+      position: fixed; bottom: 40px; left: 0; width: 270px;
+      background-color: #222; border: 1px solid #444; border-radius: 5px;
+      padding: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      display: none; z-index: 2000;
+    }
+    .start-menu .search-area {
+      margin-bottom: 10px; display: flex; gap: 5px; 
+    }
+    .start-menu input[type="text"] {
+      flex: 1; background: #333; border: 1px solid #555; color: white; padding: 5px;
+    }
+    .start-menu button.run-btn {
+      background: #444; border: 1px solid #555; color: white; cursor: pointer; width: 65px; border-radius: 5px;
+    }
+    .start-menu ul { list-style: none; margin: 0; padding: 0; }
+    .start-menu li {
+      padding: 8px 10px; color: white; cursor: pointer;
+    }
+    .start-menu li:hover {
+      background-color: #444;
+    }
+
+    /* ======== TERMINAL / JANELAS ======== */
+    .window {
+      position: absolute; border-radius: 5px;
+      border: solid rgb(47, 52, 63); border-width: 3.5px;
+      background-color: rgba(0, 0, 0, 0.92);
+      font-family: Courier, monospace; font-size: 14px;
+      resize: both; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      transition: box-shadow 0.3s, transform 0.3s, width 0.3s, height 0.3s;
+      z-index: 1; overflow: hidden;width: 600px; height: 400px;
+    }
+    .window:hover {
+      box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+    }
+    .ribbon {
+      width: 100%; height: 30px; background-color: rgb(47,52,63);
+      padding: 5px 10px; display: flex; align-items: center; cursor: move;
+    }
+    .circle {
+      width: 20px; height: 20px; margin-right: 8px; cursor: pointer;
+    }
+    .window-title {
+      flex: 1; color: white; font-weight: bold; font-size: 13px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .window-content {
+      padding: 10px; color: white; height: calc(100% - 30px);
+      overflow-y: auto; overflow-x: hidden; /* Barra de rolagem vertical */
+    }
+
+    /* Minimizar / Maximizar */
+    .minimized {
+      height: 30px !important; overflow: hidden !important; resize: none !important;
+      animation: minimize 0.3s forwards;
+    }
+    .maximized {
+      left: 0 !important; top: 0 !important; width: 100vw !important; height: 100vh !important;
+      resize: none !important; border-width: 0 !important; animation: maximize 0.3s forwards;
+    }
+    @keyframes minimize {
+      from { transform: scale(1); }
+      to { transform: scale(0.9); }
+    }
+    @keyframes maximize {
+      from { transform: scale(1); }
+      to { transform: scale(1.02); }
+    }
+
+    /* ======== TERMINAL ESPECÍFICO ======== */
+    .terminal-content {
+      color: white; font-family: Courier, monospace; font-size: 14px;
+    }
+    .terminal-input {
+      background-color: transparent; border: none; outline: none; color: green;
+    }
+
+    /* ======== EXPLORER (FILE MANAGER) ======== */
+    .explorer-content .folder, .explorer-content .file {
+      display: inline-block; width: 60px; text-align: center; margin: 10px; cursor: pointer;
+    }
+    .explorer-content img {
+      width: 48px; height: 48px;
+    }
+    .explorer-content .name {
+      font-size: 12px; color: white; margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- TELA DE BLOQUEIO -->
+<div id="lock-screen">
+  <h1>Esta sessão está bloqueada</h1>
+  <p>Digite a senha para desbloquear:</p>
+  <input type="password" id="lock-password" placeholder="Senha"/>
+  <button id="unlock-btn">Desbloquear</button>
+</div>
+
+<!-- ÁREA PRINCIPAL DO DESKTOP -->
+<div id="desktop-area">
+  <!-- MENU DE CONTEXTO (botão direito) -->
+  <div id="context-menu" class="context-menu">
+    <ul>
+      <li id="change-wallpaper">Alterar Papel de Parede</li>
+      <li id="organize-icons">Organizar Ícones</li>
+      <li id="customize-theme">Personalizar Tema</li>
+    </ul>
+  </div>
+
+  <!-- Ícones no Desktop -->
+  <div id="desktop-icons" class="desktop-icons">
+    <div class="desktop-icon" data-action="openTerminal" style="top:0; left:0;">
+      <img src="https://img.icons8.com/?size=512&id=UjcGNVXknmz3&format=png" alt="Terminal">
+      <span>Terminal</span>
+    </div>
+    <!-- Mais ícones podem ser adicionados aqui -->
+  </div>
+
+  <!-- TASKBAR -->
+  <div class="taskbar">
+    <!-- Botão Iniciar -->
+    <button class="start-button" id="start-button">
+      <img class="icon-image" src="https://img.icons8.com/?size=512&id=101665&format=png" alt="Start"/>
+      <span>Iniciar</span>
+    </button>
+
+    <!-- Botão para abrir Terminal -->
+    <button class="open-terminal" id="open-terminal">Abrir Terminal</button>
+
+    <!-- Lista de Janelas (ícones/títulos) -->
+    <div class="taskbar-windows" id="taskbar-windows"></div>
+
+    <!-- Desktop Switcher (2 desktops) -->
+    <div class="desktop-switcher" id="desktop-switcher">
+      <div class="desktop-btn active" data-desktop="0">1</div>
+      <div class="desktop-btn" data-desktop="1">2</div>
+    </div>
+
+    <!-- TRAY ICONS: Rede, Volume, Notificações, Bateria, Divider, Relógio, Lock, Logout -->
+    <div class="tray-icons">
+      <!-- Rede -->
+      <img src="https://img.icons8.com/ios-filled/50/ffffff/wifi.png"
+           alt="Rede" class="tray-icon" id="network-icon"/>
+      <!-- Volume -->
+      <img src="https://img.icons8.com/ios-filled/50/ffffff/high-volume.png"
+           alt="Volume" class="tray-icon" id="volume-icon"/>
+      <!-- Notificações (já existente) -->
+      <img src="https://img.icons8.com/ios-filled/50/ffffff/appointment-reminders.png"
+           alt="Notificações" class="tray-icon" id="notification-icon"/>
+
+      <!-- Bateria -->
+      <img src="https://img.icons8.com/ios-filled/50/ffffff/compact-camera-battery.png"
+           alt="Bateria" class="tray-icon" id="battery-icon"/>
+
+      <!-- Divider -->
+      <div class="divider"></div>
+
+      <!-- Relógio com tooltip -->
+      <div class="taskbar-clock" id="clock-container">
+        <span class="clock" id="time"></span>
+        <span class="tooltip" id="date-tooltip"></span>
+      </div>
+
+      <!-- Lock (cadeado) -->
+      <img src="https://img.icons8.com/ios-filled/50/ffffff/lock.png"
+           alt="Lock" class="tray-icon" id="lock-icon"/>
+
+      <!-- Logout -->
+      <img src="https://img.icons8.com/ios-filled/50/ffffff/logout-rounded.png"
+           alt="Logout" class="tray-icon" id="logout-icon"/>
+    </div>
+
+    <!-- Painel de Notificações -->
+    <div class="notification-panel" id="notification-panel"></div>
+  </div>
+
+  <!-- Start Menu -->
+  <div id="start-menu" class="start-menu">
+    <!-- Campo de pesquisa e "Executar" -->
+    <div class="search-area">
+      <input type="text" id="start-search" placeholder="Pesquisar..."/>
+      <button class="run-btn" id="run-btn">Executar</button>
+    </div>
+    <ul id="start-menu-list">
+      <li data-action="openTerminal">Terminal</li>
+      <li data-action="openExplorer">Explorer</li>
+      <li data-action="openSettings">Configurações</li>
+      <li data-action="lockScreen">Bloquear</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Template do Terminal -->
+<template id="terminal-template">
+  <div class="window terminal" data-title="Terminal">
+    <div class="ribbon">
+      <div class="circle close">
+        <svg><circle cx="10" cy="10" r="8" fill="rgb(242,80,86)" /></svg>
+      </div>
+      <div class="circle minimize">
+        <svg><circle cx="10" cy="10" r="8" fill="rgb(250,197,54)" /></svg>
+      </div>
+      <div class="circle maximize">
+        <svg><circle cx="10" cy="10" r="8" fill="rgb(57,234,73)" /></svg>
+      </div>
+      <div class="window-title">Terminal</div>
+    </div>
+    <div class="window-content terminal-content">
+      <span style="color: blue;">┌──(</span>
+      <span style="color: red;">root㉿kali</span>
+      <span style="color: blue;">)-[</span>
+      <span style="color: white;">/home/kiq</span>
+      <span style="color: blue;">]</span><br>
+      <span style="color: blue;">└─</span>
+      <span style="color: red;">#</span>
+      <span style="color: white;">
+        <input class="terminal-input" type="text" autocomplete="off"/>
+      </span>
+    </div>
+  </div>
+</template>
+
+<!-- Template do Explorer -->
+<template id="explorer-template">
+  <div class="window explorer" data-title="Explorer">
+    <div class="ribbon">
+      <div class="circle close">
+        <svg><circle cx="10" cy="10" r="8" fill="rgb(242,80,86)" /></svg>
+      </div>
+      <div class="circle minimize">
+        <svg><circle cx="10" cy="10" r="8" fill="rgb(250,197,54)" /></svg>
+      </div>
+      <div class="circle maximize">
+        <svg><circle cx="10" cy="10" r="8" fill="rgb(57,234,73)" /></svg>
+      </div>
+      <div class="window-title">File Explorer</div>
+    </div>
+    <div class="window-content explorer-content">
+      <div class="folder" data-name="Documentos">
+        <img src="https://img.icons8.com/fluency/48/folder-invoices.png" alt="folder"/>
+        <div class="name">Documentos</div>
+      </div>
+      <div class="folder" data-name="Imagens">
+        <img src="https://img.icons8.com/fluency/48/folder-invoices.png" alt="folder"/>
+        <div class="name">Imagens</div>
+      </div>
+      <div class="file" data-name="arquivo.txt">
+        <img src="https://img.icons8.com/fluency/48/txt.png" alt="file"/>
+        <div class="name">arquivo.txt</div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- Template de Configurações -->
+<template id="settings-template">
+  <div class="window settings" data-title="Configurações">
+    <div class="ribbon">
+      <div class="circle close">
+        <svg><circle cx="10" cy="10" r="8" fill="rgb(242,80,86)" /></svg>
+      </div>
+      <div class="circle minimize">
+        <svg><circle cx="10" cy="10" r="8" fill="rgb(250,197,54)" /></svg>
+      </div>
+      <div class="circle maximize">
+        <svg><circle cx="10" cy="10" r="8" fill="rgb(57,234,73)" /></svg>
+      </div>
+      <div class="window-title">Configurações</div>
+    </div>
+    <div class="window-content settings-content">
+      <h3>Mudar Papel de Parede</h3>
+      <input type="text" id="wallpaper-url" placeholder="URL da Imagem"/>
+      <button id="apply-wallpaper-btn">Aplicar</button>
+    </div>
+  </div>
+</template>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  /* ===================================================
+     VARIÁVEIS E ELEMENTOS BÁSICOS
+  =================================================== */
+  const lockScreen = document.getElementById("lock-screen");
+  const unlockBtn = document.getElementById("unlock-btn");
+  const lockPassword = document.getElementById("lock-password");
+  const desktopArea = document.getElementById("desktop-area");
+  const contextMenu = document.getElementById("context-menu");
+  const desktopIcons = document.getElementById("desktop-icons");
+  const startButton = document.getElementById("start-button");
+  const openTerminalBtn = document.getElementById("open-terminal");
+  const startMenu = document.getElementById("start-menu");
+  const startMenuList = document.getElementById("start-menu-list");
+  const startSearch = document.getElementById("start-search");
+  const runBtn = document.getElementById("run-btn");
+  const taskbarWindows = document.getElementById("taskbar-windows");
+  const desktopSwitcher = document.getElementById("desktop-switcher");
+  const notificationIcon = document.getElementById("notification-icon");
+  const notificationPanel = document.getElementById("notification-panel");
+  const timeSpan = document.getElementById("time");
+  const dateTooltip = document.getElementById("date-tooltip");
+
+  // Ícones do “system tray”
+  const networkIcon = document.getElementById("network-icon");
+  const volumeIcon = document.getElementById("volume-icon");
+  const batteryIcon = document.getElementById("battery-icon");
+  const lockIcon = document.getElementById("lock-icon");
+  const logoutIcon = document.getElementById("logout-icon");
+
+  const terminalTemplate = document.getElementById("terminal-template");
+  const explorerTemplate = document.getElementById("explorer-template");
+  const settingsTemplate = document.getElementById("settings-template");
+
+  let zIndexCounter = 100;
+  let currentDesktop = 0; // Desktop atual (0 ou 1)
+  const desktops = [ [], [] ]; // Array de janelas para cada desktop
+  let isLocked = false; // Se a tela está bloqueada
+
+  /* ===================================================
+     FUNÇÕES AUXILIARES
+  =================================================== */
+
+  // Salva e carrega papel de parede (Settings)
+  function loadWallpaper() {
+    const wp = localStorage.getItem("wallpaper") || "";
+    if (wp) {
+      document.body.style.background = `url("${wp}") no-repeat center center fixed`;
+      document.body.style.backgroundSize = "cover";
+    }
+  }
+  function setWallpaper(url) {
+    localStorage.setItem("wallpaper", url);
+    loadWallpaper();
+  }
+
+  // Notificações
+  function sendNotification(msg) {
+    const p = document.createElement("p");
+    p.textContent = msg;
+    notificationPanel.appendChild(p);
+    notificationPanel.scrollTop = notificationPanel.scrollHeight;
+  }
+
+  // Atualiza o clock
+  function updateClock() {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString("pt-BR");
+    const timeStr = now.toLocaleTimeString("pt-BR");
+    timeSpan.textContent = timeStr;
+    dateTooltip.textContent = dateStr;
+  }
+
+  // Ocultar / Exibir janelas de acordo com desktop atual
+  function refreshDesktops() {
+    desktops.forEach((windowsArray, index) => {
+      windowsArray.forEach(win => {
+        if (index === currentDesktop) {
+          win.style.display = "block";
+        } else {
+          win.style.display = "none";
+        }
+      });
+    });
+    // Ajusta botões do desktop switcher
+    const btns = desktopSwitcher.querySelectorAll(".desktop-btn");
+    btns.forEach(btn => {
+      btn.classList.toggle("active", parseInt(btn.dataset.desktop) === currentDesktop);
+    });
+  }
+
+  // Cria o botão na taskbar para cada janela
+  function createTaskbarButton(win) {
+    const btn = document.createElement("div");
+    btn.classList.add("taskbar-window-btn");
+    btn.textContent = win.dataset.title || "Janela";
+    btn.addEventListener("click", () => {
+      // Se estiver minimizada, restaura
+      if (win.classList.contains("minimized")) {
+        win.classList.remove("minimized");
+      } else {
+        // Minimiza se estiver normal
+        win.classList.add("minimized");
+      }
+    });
+    taskbarWindows.appendChild(btn);
+    win.taskbarButton = btn; // referência mútua
+  }
+
+  // Atualiza estilo do botão da taskbar (janela ativa etc.)
+  function refreshTaskbarButtons() {
+    const allBtns = taskbarWindows.querySelectorAll(".taskbar-window-btn");
+    allBtns.forEach(btn => btn.classList.remove("active"));
+    desktops[currentDesktop].forEach(win => {
+      if (parseInt(win.style.zIndex) === zIndexCounter) {
+        // Janela topo = active
+        if (win.taskbarButton) {
+          win.taskbarButton.classList.add("active");
+        }
+      }
+    });
+  }
+
+  // Cria uma janela (Terminal, Explorer, Settings)
+  function createWindow(template, desktopIndex=0) {
+    const win = template.content.firstElementChild.cloneNode(true);
+    // Posição randômica
+    win.style.left = (100 + Math.floor(Math.random() * 50)) + "px";
+    win.style.top = (100 + Math.floor(Math.random() * 50)) + "px";
+    win.style.zIndex = ++zIndexCounter;
+    // Se a template tiver data-title, usamos no taskbar
+    if (win.dataset.title) {
+      createTaskbarButton(win);
+    }
+    initWindowEvents(win);
+    desktops[desktopIndex].push(win);
+    desktopArea.appendChild(win);
+    refreshDesktops();
+    refreshTaskbarButtons();
+    return win;
+  }
+
+  // Lógica de arrastar janelas, botões de controle, etc.
+  function initWindowEvents(win) {
+    let isDragging = false;
+    let offset = {x:0, y:0};
+
+    const ribbon = win.querySelector(".ribbon");
+    const closeBtn = win.querySelector(".circle.close");
+    const minimizeBtn = win.querySelector(".circle.minimize");
+    const maximizeBtn = win.querySelector(".circle.maximize");
+
+    // Ao clicar na janela, traz para frente
+    win.addEventListener("mousedown", () => {
+      zIndexCounter++;
+      win.style.zIndex = zIndexCounter;
+      refreshTaskbarButtons();
+    });
+
+    // Arraste da ribbon
+    ribbon.addEventListener("mousedown", (e) => {
+      if (e.target.closest(".circle")) return; // se clicou no botão, não arrasta
+      if (win.classList.contains("maximized")) return; // não arrasta se maximizada
+      isDragging = true;
+      offset.x = e.clientX - win.offsetLeft;
+      offset.y = e.clientY - win.offsetTop;
+    });
+    document.addEventListener("mousemove", (e) => {
+      if (isDragging) {
+        let newLeft = e.clientX - offset.x;
+        let newTop = e.clientY - offset.y;
+        // Snapping nas bordas
+        if (newLeft < 10) newLeft = 0;
+        if (newTop < 10) newTop = 0;
+        if (newLeft > window.innerWidth - win.offsetWidth - 10) {
+          newLeft = window.innerWidth - win.offsetWidth;
+        }
+        if (newTop > window.innerHeight - win.offsetHeight - 50) {
+          newTop = window.innerHeight - win.offsetHeight - 40;
+        }
+        win.style.left = newLeft + "px";
+        win.style.top = newTop + "px";
+      }
+    });
+    document.addEventListener("mouseup", () => {
+      isDragging = false;
+    });
+
+    // Botão fechar
+    closeBtn.addEventListener("click", () => {
+      // Remove da array de janelas do desktop
+      desktops[currentDesktop] = desktops[currentDesktop].filter(w => w !== win);
+      // Remove da taskbar
+      if (win.taskbarButton) {
+        win.taskbarButton.remove();
+      }
+      // Remove do DOM
+      win.remove();
+      refreshTaskbarButtons();
+    });
+
+    // Botão minimizar
+    minimizeBtn.addEventListener("click", () => {
+      if (!win.classList.contains("maximized")) {
+        win.classList.toggle("minimized");
+      }
+    });
+
+    // Botão maximizar
+    maximizeBtn.addEventListener("click", () => {
+      if (win.classList.contains("maximized")) {
+        win.classList.remove("maximized");
+      } else {
+        win.classList.remove("minimized");
+        win.classList.add("maximized");
+        // Traz para frente
+        zIndexCounter++;
+        win.style.zIndex = zIndexCounter;
+      }
+    });
+
+    // Se for Explorer, tratar clique em pastas/arquivos
+    if (win.classList.contains("explorer")) {
+      const content = win.querySelector(".explorer-content");
+      content.addEventListener("click", (e) => {
+        const item = e.target.closest(".folder, .file");
+        if (item) {
+          sendNotification(`Abrindo "${item.dataset.name}"... (exemplo)`);
+        }
+      });
+    }
+
+    // Se for Settings, tratar mudança de papel de parede
+    if (win.classList.contains("settings")) {
+      const applyBtn = win.querySelector("#apply-wallpaper-btn");
+      const wallpaperUrl = win.querySelector("#wallpaper-url");
+      applyBtn.addEventListener("click", () => {
+        if (wallpaperUrl.value.trim()) {
+          setWallpaper(wallpaperUrl.value.trim());
+        }
+      });
+    }
+
+    // Se for Terminal, inicializar lógica
+    if (win.classList.contains("terminal")) {
+      initTerminalLogic(win);
+    }
+  }
+
+  // Lógica do terminal (comandos)
+  function initTerminalLogic(win) {
+    const terminalContent = win.querySelector(".terminal-content");
+    const input = win.querySelector(".terminal-input");
+
+    const commands = {
+      whoami: () => "root",
+      id: () => "uid=0(root) gid=0(root) groups=0(root)",
+      notify: (args) => { sendNotification(args || "Notificação..."); return "Enviando notificação..."; }
+    };
+
+    function appendCommandLine(text) {
+      const p = document.createElement("p");
+      p.innerHTML = `<span style="color: blue;">┌──(</span>
+                     <span style="color: red;">root㉿kali</span>
+                     <span style="color: blue;">)-[</span>
+                     <span style="color: white;">/home/kiq</span>
+                     <span style="color: blue;">]</span><br>
+                     <span style="color: blue;">└─</span>
+                     <span style="color: red;">#</span>
+                     <span style="color: white;"> ${text}</span>`;
+      terminalContent.appendChild(p);
+      terminalContent.scrollTop = terminalContent.scrollHeight;
+    }
+    function appendOutput(text) {
+      const p = document.createElement("p");
+      p.style.color = "white";
+      p.textContent = text;
+      terminalContent.appendChild(p);
+      terminalContent.scrollTop = terminalContent.scrollHeight;
+    }
+
+    function processCommand(text) {
+      const parts = text.split(" ");
+      const cmd = parts[0].toLowerCase();
+      const args = parts.slice(1).join(" ");
+      if (cmd === "clear") {
+        terminalContent.querySelectorAll("p").forEach(p => p.remove());
+        return;
+      }
+      if (cmd === "encode") {
+        try { appendOutput(btoa(args)); } catch(e) { appendOutput("Erro: " + e.message); }
+        return;
+      }
+      if (cmd === "decode") {
+        try { appendOutput(atob(args)); } catch(e) { appendOutput("Erro: " + e.message); }
+        return;
+      }
+      if (commands[cmd]) {
+        appendOutput(commands[cmd](args));
+      } else {
+        appendOutput("Comando não encontrado: " + text);
+      }
+    }
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const val = input.value.trim();
+        if (val) {
+          appendCommandLine(val);
+          processCommand(val);
+        }
+        input.value = "";
+      }
+    });
+  }
+
+  // Alternar desktops
+  desktopSwitcher.addEventListener("click", (e) => {
+    const btn = e.target.closest(".desktop-btn");
+    if (!btn) return;
+    currentDesktop = parseInt(btn.dataset.desktop);
+    refreshDesktops();
+  });
+
+  // Bloquear tela
+  function lock() {
+    isLocked = true;
+    lockScreen.style.display = "block";
+  }
+  function unlock() {
+    if (lockPassword.value === "kali") {
+      isLocked = false;
+      lockScreen.style.display = "none";
+      lockPassword.value = "";
+    } else {
+      alert("Senha incorreta! Tente 'kali'.");
+    }
+  }
+
+  unlockBtn.addEventListener("click", () => unlock());
+
+  /* ===================================================
+     EVENTOS DE CLIQUE E CONTEXT MENU
+  =================================================== */
+  // Botão “Iniciar”
+  startButton.addEventListener("click", () => {
+    startMenu.style.display = (startMenu.style.display === "block") ? "none" : "block";
+  });
+  // Fecha o Start Menu se clicar fora
+  document.addEventListener("click", (e) => {
+    if (!startButton.contains(e.target) && !startMenu.contains(e.target)) {
+      startMenu.style.display = "none";
+    }
+  });
+
+  // Start Menu: lista de itens
+  startMenuList.addEventListener("click", (e) => {
+    const li = e.target.closest("li");
+    if (!li) return;
+    const action = li.dataset.action;
+    if (action === "openTerminal") {
+      createWindow(terminalTemplate, currentDesktop);
+    } else if (action === "openExplorer") {
+      createWindow(explorerTemplate, currentDesktop);
+    } else if (action === "openSettings") {
+      createWindow(settingsTemplate, currentDesktop);
+    } else if (action === "lockScreen") {
+      lock();
+    }
+    startMenu.style.display = "none";
+  });
+
+  // Pesquisar no Start Menu
+  startSearch.addEventListener("input", () => {
+    const query = startSearch.value.toLowerCase();
+    const items = startMenuList.querySelectorAll("li");
+    items.forEach(item => {
+      const text = item.textContent.toLowerCase();
+      item.style.display = text.includes(query) ? "block" : "none";
+    });
+  });
+
+  // Botão “Executar”
+  runBtn.addEventListener("click", () => {
+    const appName = startSearch.value.trim().toLowerCase();
+    if (!appName) return;
+    // Exemplo: “terminal” ou “explorer” ou “configurações”
+    if (appName.includes("term")) {
+      createWindow(terminalTemplate, currentDesktop);
+    } else if (appName.includes("explor")) {
+      createWindow(explorerTemplate, currentDesktop);
+    } else if (appName.includes("config")) {
+      createWindow(settingsTemplate, currentDesktop);
+    } else {
+      alert("Aplicativo não encontrado: " + appName);
+    }
+    startMenu.style.display = "none";
+    startSearch.value = "";
+  });
+
+  // Botão “Abrir Terminal” na taskbar
+  openTerminalBtn.addEventListener("click", () => {
+    createWindow(terminalTemplate, currentDesktop);
+  });
+
+  // Ícones no desktop (abrir terminal, etc.) + arrastar e soltar
+  let iconDragging = null;
+  let iconOffset = {x:0, y:0};
+
+  desktopIcons.addEventListener("mousedown", (e) => {
+    const icon = e.target.closest(".desktop-icon");
+    if (icon) {
+      iconDragging = icon;
+      icon.classList.add("dragging");
+      iconOffset.x = e.clientX - icon.offsetLeft;
+      iconOffset.y = e.clientY - icon.offsetTop;
+    }
+  });
+  document.addEventListener("mousemove", (e) => {
+    if (iconDragging) {
+      let x = e.clientX - iconOffset.x;
+      let y = e.clientY - iconOffset.y;
+      if (x < 0) x = 0;
+      if (y < 0) y = 0;
+      iconDragging.style.left = x + "px";
+      iconDragging.style.top = y + "px";
+    }
+  });
+  document.addEventListener("mouseup", (e) => {
+    if (iconDragging) {
+      iconDragging.classList.remove("dragging");
+      iconDragging = null;
+    }
+  });
+
+  // Clique em ícone do desktop
+  desktopIcons.addEventListener("click", (e) => {
+    const icon = e.target.closest(".desktop-icon");
+    if (icon && !iconDragging) {
+      const action = icon.dataset.action;
+      if (action === "openTerminal") {
+        createWindow(terminalTemplate, currentDesktop);
+      }
+    }
+  });
+
+  // Context menu (botão direito) no desktop
+  document.body.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    if (isLocked) return; // se bloqueado, ignora
+    contextMenu.style.display = "block";
+    contextMenu.style.left = e.pageX + "px";
+    contextMenu.style.top = e.pageY + "px";
+  });
+  document.body.addEventListener("click", () => {
+    contextMenu.style.display = "none";
+  });
+
+  // Opções do context menu
+  document.getElementById("change-wallpaper").addEventListener("click", () => {
+    // Abre settings
+    createWindow(settingsTemplate, currentDesktop);
+  });
+  document.getElementById("organize-icons").addEventListener("click", () => {
+    // Alinhar ícones em grade
+    let startX = 20, startY = 20, stepY = 70;
+    const icons = desktopIcons.querySelectorAll(".desktop-icon");
+    icons.forEach((icon, i) => {
+      icon.style.left = startX + "px";
+      icon.style.top = (startY + i*stepY) + "px";
+    });
+  });
+  document.getElementById("customize-theme").addEventListener("click", () => {
+    sendNotification("Personalizar Tema (Exemplo)...");
+  });
+
+  // Ícone de notificações
+  notificationIcon.addEventListener("click", (e) => {
+    notificationPanel.style.display = (notificationPanel.style.display === "block") ? "none" : "block";
+  });
+
+  // Fechar notificação panel ao clicar fora
+  document.addEventListener("click", (e) => {
+    if (!notificationIcon.contains(e.target) && !notificationPanel.contains(e.target)) {
+      notificationPanel.style.display = "none";
+    }
+  }, true);
+
+  /* ===================================================
+     INTEGRAÇÃO DOS NOVOS ÍCONES (REDE, VOLUME, BATERIA, LOCK, LOGOUT)
+  =================================================== */
+  networkIcon.addEventListener("click", () => {
+    alert("Exibindo opções de Rede (Exemplo).");
+  });
+  volumeIcon.addEventListener("click", () => {
+    alert("Exibindo controle de Volume (Exemplo).");
+  });
+  batteryIcon.addEventListener("click", () => {
+    alert("Exibindo status de Bateria (Exemplo).");
+  });
+  lockIcon.addEventListener("click", () => {
+    lock(); // Bloqueia a tela
+  });
+  logoutIcon.addEventListener("click", () => {
+    alert("Logout (Exemplo)...");
+  });
+
+  /* ===================================================
+     ATALHOS DE TECLADO
+  =================================================== */
+  document.addEventListener("keydown", (e) => {
+    // Bloqueado? não faz nada
+    if (isLocked) return;
+
+    // Alt+Tab
+    if (e.altKey && e.key === "Tab") {
+      e.preventDefault();
+      if (desktops[currentDesktop].length > 0) {
+        const topWin = desktops[currentDesktop].pop();
+        desktops[currentDesktop].unshift(topWin);
+        zIndexCounter++;
+        topWin.style.zIndex = zIndexCounter;
+        refreshTaskbarButtons();
+      }
+    }
+
+    // Ctrl+Shift+T: abrir terminal
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "t") {
+      e.preventDefault();
+      createWindow(terminalTemplate, currentDesktop);
+    }
+
+    // Alt+F4: fechar janela ativa
+    if (e.altKey && e.key === "F4") {
+      e.preventDefault();
+      if (desktops[currentDesktop].length > 0) {
+        // A janela com maior zIndex
+        const topWin = desktops[currentDesktop].reduce((acc, w) => {
+          const zi = parseInt(w.style.zIndex) || 0;
+          return (zi > parseInt(acc.style.zIndex)) ? w : acc;
+        }, desktops[currentDesktop][0]);
+        // Fecha
+        if (topWin) {
+          if (topWin.taskbarButton) topWin.taskbarButton.remove();
+          topWin.remove();
+          desktops[currentDesktop] = desktops[currentDesktop].filter(w => w !== topWin);
+          refreshTaskbarButtons();
+        }
+      }
+    }
+  });
+
+  /* ===================================================
+     EXECUÇÃO AO CARREGAR
+  =================================================== */
+  loadWallpaper();
+  updateClock();
+  setInterval(updateClock, 1000);
+  refreshDesktops();
+
+  // Desbloquear com Enter
+  lockPassword.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      unlock();
+    }
+  });
+});
+</script>
+</body>
+</html>
